@@ -36,6 +36,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+traffic = [
+    "torch>=2.2.0",
+    "psutil>=5.9.0",
+]
 dev = [
     "black>=24.2.0",
 ]

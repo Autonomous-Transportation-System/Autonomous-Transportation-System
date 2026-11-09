@@ -162,6 +162,7 @@ def get_ui_html() -> str:
   <span style="font-size:24px">🤖</span>
   <h1>LangManus</h1>
   <span class="badge">应用管理控制台</span>
+  <a href="/traffic/platform/ui" style="color:#fff;font-size:14px;text-decoration:none;margin-left:12px">交通联合编排 ↗</a>
   <span id="server-status" style="margin-left:auto;font-size:13px;opacity:.8">● 连接中...</span>
 </header>
 

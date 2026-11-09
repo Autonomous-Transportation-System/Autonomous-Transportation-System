@@ -14,14 +14,18 @@
 import json
 import logging
 import os
+import tempfile
 import uuid
-from typing import Dict, List, Optional
+from copy import deepcopy
+from datetime import datetime
+from typing import Dict, List, Optional, get_args
 
-from src.app.models import AgentImage, AppInfo, GuidanceFile
+from src.app.models import AgentImage, AppInfo, AppStatus, GuidanceFile
 
 APPS_STORE_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "apps_store.json")
 
 logger = logging.getLogger(__name__)
+_UNSET = object()
 
 
 class AppManager:
@@ -37,10 +41,19 @@ class AppManager:
     6. get_app()    — 查询单个 AppInfo
     """
 
-    def __init__(self):
+    def __init__(self, store_path=None, *, execution_backend=None):
+        """Optionally inject a store and an ALRE-compatible execution backend.
+
+        The default backend and the ordinary/periodic workflow APIs are retained.
+        Traffic bridges use install/update_state without invoking start_app.
+        """
         # app_id → AppInfo
         self._apps: Dict[str, AppInfo] = {}
-        self._store_path = os.path.abspath(APPS_STORE_PATH)
+        self._execution_backend = execution_backend
+        self._execution_backends: Dict[str, object] = {}
+        self._store_path = os.path.abspath(
+            APPS_STORE_PATH if store_path is None else os.fspath(store_path)
+        )
         os.makedirs(os.path.dirname(self._store_path), exist_ok=True)
         self._load_from_disk()
         logger.info("AppManager (APPM) 初始化完成")
@@ -52,6 +65,7 @@ class AppManager:
         try:
             with open(self._store_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            reset = False
             for app_id, app_dict in data.items():
                 gf_dict = app_dict.pop("guidance_file", None)
                 guidance_file = None
@@ -62,23 +76,110 @@ class AppManager:
                 if app.status in ("running", "starting", "stopping", "scheduled"):
                     app.status = "stopped"
                     app.workflow_handle = None
+                    app.app_interface_url = None
+                    reset = True
+                    if guidance_file and guidance_file.metadata.get("execution_backend") in ("traffic", "traffic_joint"):
+                        run = guidance_file.metadata.setdefault("traffic_run", {})
+                        run.update(last_run_status="interrupted", active_workflow_id=None,
+                                   finished_at=datetime.utcnow().isoformat())
                 self._apps[app_id] = app
                 # 同步恢复 ALRE 的指导文件内存字典
                 if guidance_file:
                     engine = self._get_engine()
                     engine.install_app_logic(guidance_file)
+            if reset:
+                self._save_to_disk()
             logger.info(f"[APPM] 从磁盘恢复 {len(self._apps)} 个应用")
         except Exception as e:
             logger.warning(f"[APPM] 恢复应用列表失败: {e}")
 
     def _save_to_disk(self):
         """将应用列表持久化到磁盘"""
+        temporary = None
         try:
             data = {app_id: app.to_dict() for app_id, app in self._apps.items()}
-            with open(self._store_path, "w", encoding="utf-8") as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=os.path.dirname(self._store_path),
+                prefix=".apps-", suffix=".json", delete=False,
+            ) as f:
+                temporary = f.name
                 json.dump(data, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temporary, self._store_path)
         except Exception as e:
             logger.warning(f"[APPM] 保存应用列表失败: {e}")
+            raise
+        finally:
+            if temporary and os.path.exists(temporary):
+                os.unlink(temporary)
+
+    def update_state(
+        self, app_id: str, status: AppStatus, *, expected_handle=_UNSET,
+        workflow_handle=_UNSET, app_interface_url=_UNSET, error=_UNSET,
+        metadata: Optional[dict] = None,
+    ) -> bool:
+        """Persist a lifecycle transition, optionally comparing the current handle.
+
+        expected_handle=None explicitly requires no current execution. Metadata
+        lives in the existing GuidanceFile and survives AppInfo serialization.
+        A stale completion returns False without touching any persisted field.
+        """
+        if status not in get_args(AppStatus):
+            raise ValueError(f"Unknown application status: {status}")
+        app = self._apps.get(app_id)
+        if app is None or (expected_handle is not _UNSET and app.workflow_handle != expected_handle):
+            return False
+        if metadata is not None and app.guidance_file is None:
+            raise ValueError("Application metadata requires a GuidanceFile")
+        previous = deepcopy(app)
+        app.update_status(status)
+        if workflow_handle is not _UNSET:
+            app.workflow_handle = workflow_handle
+        if app_interface_url is not _UNSET:
+            app.app_interface_url = app_interface_url
+        if error is not _UNSET:
+            app.error_message = error
+        if metadata is not None:
+            app.guidance_file.metadata.update(deepcopy(metadata))
+        try:
+            self._save_to_disk()
+        except Exception:
+            self._apps[app_id] = previous
+            raise
+        return True
+
+    def register_execution_backend(self, kind: str, backend) -> None:
+        """Register an application backend whose start/stop return bridge dictionaries.
+
+        Configuration storage remains ALRE-compatible. Registration never loads
+        models and cannot replace another live backend of the same kind.
+        """
+        if not kind or not callable(getattr(backend, "start", None)) or not callable(getattr(backend, "stop", None)):
+            raise ValueError("A named backend requires start and stop methods")
+        existing = self._execution_backends.get(kind)
+        if existing is not None and existing is not backend:
+            raise ValueError(f"Execution backend already registered: {kind}")
+        self._execution_backends[kind] = backend
+
+    def unregister_execution_backend(self, kind: str, backend) -> bool:
+        """Remove only the expected backend, after its applications have stopped."""
+        if self._execution_backends.get(kind) is not backend:
+            return False
+        if any(app.status in ("starting", "running", "stopping") and app.guidance_file and
+               app.guidance_file.metadata.get("execution_backend") == kind for app in self._apps.values()):
+            raise RuntimeError("Cannot unregister a backend with active applications")
+        del self._execution_backends[kind]
+        return True
+
+    def _registered_backend(self, app):
+        kind = app.guidance_file.metadata.get("execution_backend") if app.guidance_file else None
+        if kind is None:
+            return None
+        backend = self._execution_backends.get(kind)
+        if backend is None:
+            raise RuntimeError(f"Execution backend is unavailable: {kind}")
+        return backend
 
     # ------------------------------------------------------------------
     # 安装 / 卸载
@@ -157,6 +258,9 @@ class AppManager:
             logger.warning(f"[APPM] uninstall: app_id={app_id} 未找到")
             return False
 
+        if app.guidance_file and app.guidance_file.metadata.get("execution_backend") and app.status in ("starting", "running", "stopping"):
+            raise RuntimeError("Stop the execution backend before uninstalling this application")
+
         if app.status == "running":
             logger.warning(
                 f"[APPM] uninstall: app_id={app_id} 正在运行，建议先调用 stop()"
@@ -167,9 +271,10 @@ class AppManager:
         engine.uninstall_app_logic(app_id)
 
         # 卸载 AW 中的镜像
-        warehouse = self._get_warehouse()
-        for image_id in app.image_ids:
-            warehouse.uninstall_agent(image_id)
+        if app.image_ids:
+            warehouse = self._get_warehouse()
+            for image_id in app.image_ids:
+                warehouse.uninstall_agent(image_id)
 
         # 删除应用记录
         del self._apps[app_id]
@@ -200,6 +305,11 @@ class AppManager:
         if not app:
             logger.error(f"[APPM] start: app_id={app_id} 未找到")
             return None
+
+        backend = self._registered_backend(app)
+        if backend is not None:
+            result = await backend.start(app_id)
+            return result["workflow_id"]
 
         if app.status == "running":
             logger.warning(f"[APPM] start: app_id={app_id} 已在运行中")
@@ -247,6 +357,15 @@ class AppManager:
         if not app:
             logger.warning(f"[APPM] stop: app_id={app_id} 未找到")
             return False
+
+        backend = self._registered_backend(app)
+        if backend is not None:
+            result = await backend.stop(app_id)
+            # Legacy API renders stopped unconditionally. Preserve its bool
+            # contract, and wait for real termination before it can render that.
+            if not result["done"]:
+                await backend.wait(app_id)
+            return self._apps[app_id].status == "stopped"
 
         if app.status not in ("running", "starting"):
             logger.warning(
@@ -299,6 +418,10 @@ class AppManager:
         app = self._apps.get(app_id)
         if not app:
             logger.error(f"[APPM] start_schedule: app_id={app_id} 未找到")
+            return False
+
+        if app.guidance_file and app.guidance_file.metadata.get("execution_backend") in ("traffic", "traffic_joint"):
+            logger.warning("[APPM] Traffic apps must use the joint traffic runtime")
             return False
 
         if app.status == "scheduled":
@@ -456,6 +579,8 @@ class AppManager:
         return get_agent_warehouse()
 
     def _get_engine(self):
+        if self._execution_backend is not None:
+            return self._execution_backend
         from src.app.app_logic_engine import get_app_logic_engine
         return get_app_logic_engine()
 

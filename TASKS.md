@@ -1,18 +1,18 @@
 # TASKS.md — Sprint 任务看板
 
-> 最后更新：2026-05-07
+> 最后更新：2026-11-09
 
 ---
 
 ## Sprint 当前目标
 
-跨节点编排增强 + 子工作流即服务 + 周期性调度
+支持智能体与资源联合编排的交通计算平台：实现、真实实验、验收与新分支交付
 
 ---
 
 ## 进行中
 
-_（当前无进行中任务）_
+- [ ] Git提交、推送新分支并核验远端提交
 
 
 ---
@@ -32,6 +32,11 @@ _（当前无进行中任务）_
 ---
 
 ## 已完成（本 Sprint）
+
+- [x] **交通联合平台工程实现与验收**（2026-11-09）：能力/实现/实例目录、三业务及自定义 DAG、实际契约适配、共享资源池五种调度、真实 B1 两实例、缓存/计算合并、有限恢复、应用/注册/QoS桥接、HTTP/A2A与五视图；828项回归通过，独立审查缺陷已修复。
+- [x] **正式实验及文档**：113组真实、300组模拟完成并独立核验；保存原始JSON/CSV、事件、采样与SHA，汇总到docs/traffic_validation.md及traffic_validation_summary.json。五视图截图与报告关键区域已归档，保护源及Word指纹保持一致。
+- [x] **独立源码仓库与制品隔离**：从远端 main 创建新分支，备份旧基础代码并记录保护源/Word 指纹；真实模型和数据原样导出至 gitignored 目录。
+- [x] **复运行协议与 SSH 推送准备**：提供 standalone 依赖、导出/实验脚本与模块契约；专用 GitHub SSH 认证及新分支推送 dry-run 已通过。
 
 - [x] **周期性工作流调度**（2026-05-07）：新增 `src/service/workflow_scheduler.py` WorkflowScheduler 单例。`models.py` 新增 `ScheduleExecutionRecord` + AppStatus `"scheduled"`。`app_manager.py` 新增 `start_schedule()/stop_schedule()/restore_schedules()`。`app_logic_engine.py` 暴露 `run_single_workflow()`。`app.py` 新增 4 个调度 API + startup 自动恢复。`ui.py` 前端新增调度配置字段 + 控制按钮 + 历史面板。32 个集成测试全通过。
 - [x] **项目交接文档**（2026-05-07）：编写 `接口/项目交接文档.md`，11 章节覆盖项目简介、快速启动、架构概览、核心模块详解、目录结构、API 速查、骨架说明、关键约束、进度与待办、常见问题、文档索引。

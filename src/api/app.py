@@ -18,6 +18,8 @@ from src.graph import build_graph
 from src.config import TEAM_MEMBERS
 from src.service.workflow_service import run_agent_workflow
 from src.api.visualization_routes import router as viz_router
+from src.api.traffic import router as traffic_router, get_runtime as get_traffic_runtime
+from src.api.traffic_platform import router as traffic_platform_router, shutdown_platform
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -43,6 +45,14 @@ graph = build_graph()
 
 # 挂载可视化路由 (端口 8000 → /viz, /api/viz/*, /ws/viz/*)
 app.include_router(viz_router)
+app.include_router(traffic_router)
+app.include_router(traffic_platform_router)
+
+
+@app.on_event("shutdown")
+async def shutdown_traffic_services():
+    await shutdown_platform()
+    await get_traffic_runtime().shutdown()
 
 
 # ======================================================================

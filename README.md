@@ -1,4 +1,26 @@
-# 🤖 LangManus - 自适应分布式 Agent 编排系统
+# Autonomous Transportation System — 交通计算平台
+
+本仓库在 LangManus 应用管理、智能体发现和 A2A 编排基础上，实现**支持智能体与资源联合编排的交通计算平台**。交通数值执行路径支持能力/实现/实例目录、契约驱动的业务 DAG、全局资源准入、实例选择、同窗口推理复用、有界故障恢复和真实预测可视化。
+
+交通平台可以独立启动，无需 LLM API Key：
+
+```bash
+python -m pip install -r requirements-traffic.txt
+python scripts/export_traffic_artifacts.py --source /path/to/real/experiment --destination data/traffic_artifacts
+TRAFFIC_EXPERIMENT_ROOT=data/traffic_artifacts TRAFFIC_SERVICE_URL=http://127.0.0.1:18763 PYTHONPATH=. python -m uvicorn traffic_server:app --host 127.0.0.1 --port 18763
+```
+
+浏览器访问 `http://127.0.0.1:18763/traffic/platform/ui`，依次创建应用、选择流量预测/状态流量联合分析/OD 热点模板、运行并查看联合计划、资源事件和真实结果。制品需来自已有训练实验；导出方法见[真实制品说明](docs/traffic_artifacts.md)。每个样本使用 90 分钟历史预测下一 30 分钟，batch 是独立样本数。
+
+- [平台架构与 API 操作](docs/traffic_platform.md)
+- [相关研究与机制依据](docs/traffic_related_work.md)
+- [实施计划与验收](docs/traffic_joint_orchestration_plan.md)
+- [模块接口契约](docs/traffic_module_contracts.md)
+- [联合调度方法与实现口径](docs/traffic_joint_scheduling_method.md)
+- [真实实验、策略对比和消融协议](docs/traffic_experiment_protocol.md)
+- [最终验收记录](docs/traffic_validation.md)与[完整指标JSON](docs/traffic_validation_summary.json)：828项交通回归、113组真实、300组模拟及真实HTTP/Chrome操作通过对应检查。
+
+原 LangManus 入口、周期调度、子工作流与分布式编排说明保留如下。
 
 <div align="center">
 

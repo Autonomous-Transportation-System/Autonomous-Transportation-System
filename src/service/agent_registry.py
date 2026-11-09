@@ -8,16 +8,19 @@ L3 Agent 注册表模拟器
 1. 配置文件模式：从 config/agent_registry.json 读取（生产推荐）
 2. Mock 模式：使用代码中定义的默认配置（开发测试）
 """
+from __future__ import annotations
+
 import asyncio
 import logging
 import json
 import os
 import time
-from typing import List, Dict, Any, Optional
+from typing import TYPE_CHECKING, List, Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
 
-from src.graph.distributed_types import AgentInfo, SubWorkflowInfo
+if TYPE_CHECKING:
+    from src.graph.distributed_types import AgentInfo, SubWorkflowInfo
 
 logger = logging.getLogger(__name__)
 

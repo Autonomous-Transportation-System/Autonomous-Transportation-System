@@ -1,15 +1,16 @@
 # 项目上下文快照
 
-> 最后更新：2026-05-07
+> 最后更新：2026-11-09
 
 ---
 
 ## 项目概述
 
-**LangManus**：基于 LangGraph 的分布式 Agent 编排系统，实现 Microsoft Magentic-One 模式 + 自适应模式选择。
+**Autonomous Transportation System**：在 LangManus 分布式 Agent 编排基础上实现交通能力与资源联合编排，保留 Microsoft Magentic-One、自适应模式、周期调度及子工作流入口。
 
-- 技术栈：Python 3.11 + LangGraph + FastAPI + httpx + asyncio
-- 项目根：`/Users/zhangtianfu/Desktop/project/langmanus`
+- 技术栈：完整项目声明 Python >=3.12；交通数值路径使用 FastAPI、httpx、asyncio、NumPy、Torch
+- 项目根：`Autonomous-Transportation-System`
+- 交通平台：`traffic_server.py`，默认端口 18763，页面 `/traffic/platform/ui`
 - 主服务：`server.py`（FastAPI，端口 8000）
 - Agent 节点：`agent_server.py`（可多实例，端口可配置，默认 9000）
 
@@ -19,6 +20,12 @@
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
+| 交通能力/实现/实例目录与契约编译 | ✅ 已实现 | 三业务模板、自定义 DAG、schema 快照、显式输入绑定 |
+| 交通全局联合调度 | ✅ 已实现 | 共用 ResourcePool，五策略、实例选择、有限重试及真实终态释放 |
+| 真实 B1 联合运行时 | ✅ 已实现并验收 | 独立模型实例、实际 edge adapter、三头缓存准入、singleflight、取消排空 |
+| 交通管理与五视图 UI | ✅ 已实现 | AppManager 持久化、注册、QoS 隔离/健康恢复、HTTP/A2A 接入 |
+| 联合平台正式实验与前端验收 | ✅ 已完成 | 828项回归、113真实组、300模拟组、TCP/A2A和五视图截图 |
+| 新分支交付 | 待推送 | 代码与验收汇总已就绪；分支feat/traffic-joint-orchestration-20261109 |
 | §1 应用层（install/start/stop/display） | ✅ 已完成 | 含 Skills.md 在线编辑 |
 | §2.1 单主体工作流编排 | ✅ 已完成 | ASD 用 subprocess，非 Docker |
 | §2.2 跨主体工作流编排 | ✅ 已完成 | httpx POST /orchestration/dispatch |
@@ -38,6 +45,16 @@
 ---
 
 ## 当前正在解决的问题
+
+**交通计算平台联合编排验收与交付**（2026-11-09）
+
+分支 `feat/traffic-joint-orchestration-20261109` 从远端 main `5fe1377` 建立。目录、契约编译、全局调度、真实模型运行、应用/注册/QoS桥接和五视图均已实现并验证。828项交通回归、9个真实TCP工作流、113组正式真实实验及300组模拟通过对应检查；实验与提交代码的14份执行文件SHA一致，最终前端截图再次核对当前源码。
+
+共享计算消融真实forward合计120→5，P95降低13.14%，配对预测差为0。联合策略的中、高负载按期率提高，也存在部分延迟/吞吐退化；完整均值、标准差与边界见 [验收记录](docs/traffic_validation.md) 和 [机器可读汇总](docs/traffic_validation_summary.json)。本机当前页面为 `http://127.0.0.1:18764/traffic/platform/ui`，保留原应用store；仓库默认启动端口仍为18763。
+
+研究点固定为“基于共享表征的多智能体交通态势认知方法”和“支持智能体与资源联合编排的交通计算平台”。本轮交付代码和工程文档，五个 Word 模块及第一研究点实验源保持原样。平台操作见 [traffic_platform.md](docs/traffic_platform.md)，实验口径见 [traffic_experiment_protocol.md](docs/traffic_experiment_protocol.md)。
+
+以下为保留的原平台阶段记录。
 
 **周期性工作流调度**（2026-05-07 完成）
 
@@ -114,6 +131,13 @@ POST /api/apps/install + /start  (或 任何调 run_distributed_workflow 的入�
 ---
 
 ## 关键约束与决策
+
+- 交通计划与执行状态独立于 LangGraph 对话状态；保留原 Scheduler/TaskSpec API，通过新增 JointScheduler 共享 public ResourcePool。
+- 业务 deadline 为软目标；节点 timeout/取消必须等待实际同步 Future 终态才回收，不由 HTTP waiter 管理工作生命周期。
+- 缓存/请求合并按完整模型、数据、窗口、训练统计和输入契约身份，完整三头有效才缓存；调度器唯一负责重试。
+- schema 契约不只生成图表说明，运行时按已选上下游实例执行适配并保留实际 trace。
+- 应用管理通过 public backend hooks 和 update_state 接入；QoS 隔离仅影响后续调度，显式恢复受冷却保护。
+- 配额账本与进程 RSS/CPU 分别报告；真实并发计时与 profile 校准模拟分别保存。保护 RRDC/AW/ASD/ALCM 骨架不改。
 
 - `qwq-plus` 只支持 streaming=True，在 `src/agents/llm.py` 中特殊处理；节点中使用 `llm.astream()` 异步流式调用
 - 所有 LangGraph 节点函数（planner/executor/monitor/reporter）均为 `async def`，所有 LLM 调用均使用异步方法（`astream`/`ainvoke`），确保多工作流并发执行
