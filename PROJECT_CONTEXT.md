@@ -25,7 +25,7 @@
 | 真实 B1 联合运行时 | ✅ 已实现并验收 | 独立模型实例、实际 edge adapter、三头缓存准入、singleflight、取消排空 |
 | 交通管理与五视图 UI | ✅ 已实现 | AppManager 持久化、注册、QoS 隔离/健康恢复、HTTP/A2A 接入 |
 | 联合平台正式实验与前端验收 | ✅ 已完成 | 828项回归、113真实组、300模拟组、TCP/A2A和五视图截图 |
-| 新分支交付 | 待推送 | 代码与验收汇总已就绪；分支feat/traffic-joint-orchestration-20261109 |
+| 新分支交付 | ✅ 已推送 | 功能提交e3a7cb3；分支feat/traffic-joint-orchestration-20261109 |
 | §1 应用层（install/start/stop/display） | ✅ 已完成 | 含 Skills.md 在线编辑 |
 | §2.1 单主体工作流编排 | ✅ 已完成 | ASD 用 subprocess，非 Docker |
 | §2.2 跨主体工作流编排 | ✅ 已完成 | httpx POST /orchestration/dispatch |
@@ -51,6 +51,8 @@
 分支 `feat/traffic-joint-orchestration-20261109` 从远端 main `5fe1377` 建立。目录、契约编译、全局调度、真实模型运行、应用/注册/QoS桥接和五视图均已实现并验证。828项交通回归、9个真实TCP工作流、113组正式真实实验及300组模拟通过对应检查；实验与提交代码的14份执行文件SHA一致，最终前端截图再次核对当前源码。
 
 共享计算消融真实forward合计120→5，P95降低13.14%，配对预测差为0。联合策略的中、高负载按期率提高，也存在部分延迟/吞吐退化；完整均值、标准差与边界见 [验收记录](docs/traffic_validation.md) 和 [机器可读汇总](docs/traffic_validation_summary.json)。本机当前页面为 `http://127.0.0.1:18764/traffic/platform/ui`，保留原应用store；仓库默认启动端口仍为18763。
+
+GitHub将原yezzze地址重定向至[当前仓库](https://github.com/Autonomous-Transportation-System/Autonomous-Transportation-System/tree/feat/traffic-joint-orchestration-20261109)。功能代码已推送并核验远端，文档状态在同一分支同步。
 
 研究点固定为“基于共享表征的多智能体交通态势认知方法”和“支持智能体与资源联合编排的交通计算平台”。本轮交付代码和工程文档，五个 Word 模块及第一研究点实验源保持原样。平台操作见 [traffic_platform.md](docs/traffic_platform.md)，实验口径见 [traffic_experiment_protocol.md](docs/traffic_experiment_protocol.md)。
 
